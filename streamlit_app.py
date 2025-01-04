@@ -83,3 +83,28 @@ with st.expander('Data preparation'):
     st.write('**Encoded y**')
     st.write(y)
 
+# Model Training
+param_grid = {
+    'n_estimators': [50, 100],
+    'max_depth': [None, 5, 10]
+}
+
+# Create the base model
+base_rf = RandomForestClassifier(random_state=42)
+
+# Perform grid search
+grid_search = GridSearchCV(base_rf, param_grid, cv=3, scoring='accuracy', n_jobs=-1)
+grid_search.fit(X, y)
+
+best_model = grid_search.best_estimator_
+best_params = grid_search.best_params_
+st.write("**Best Parameters**:", best_params)
+
+# ---------------------------
+# 7) Apply the best model to make predictions
+# ---------------------------
+prediction = best_model.predict(input_row)
+prediction_proba = best_model.predict_proba(input_row)
+
+df_prediction_proba = pd.DataFrame(prediction_proba, columns=['Adelie', 'Chinstrap', 'Gentoo'])
+
