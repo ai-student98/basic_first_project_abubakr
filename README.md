@@ -1,9 +1,6 @@
-# 📦 Streamlit App Starter Kit 
-```
-⬆️ (Replace above with your app's name)
-```
+# 🤖 Abubakr first project
 
-Description of the app ...
+Сегодня создам свой первый сайт
 
 ## Demo App
 
