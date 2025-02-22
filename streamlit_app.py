@@ -2,145 +2,76 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import train_test_split
 import numpy as np
+from sklearn.preprocessing import LabelEncoder
 
-st.title('😁😂 My first website')
+st.title('🐧 Penguin Species Classification')
+st.write('### Исследование и предсказание видов пингвинов')
 
-st.write('Тут я задеплою модель классификации')
-
+# Загрузка данных
 df = pd.read_csv("https://raw.githubusercontent.com/dataprofessor/data/master/penguins_cleaned.csv")
 
-with st.expander('Data'):
-  st.write("X")
-  X_raw = df.drop('species', axis=1)
-  st.dataframe(X_raw)
+# Визуализация данных
+st.sidebar.header("Фильтр данных")
+island_filter = st.sidebar.multiselect('Острова', df['island'].unique(), default=df['island'].unique())
+gender_filter = st.sidebar.multiselect('Пол', df['sex'].unique(), default=df['sex'].unique())
 
-  st.write("y")
-  y_raw = df.species
-  st.dataframe(y_raw)
+filtered_df = df[(df['island'].isin(island_filter)) & (df['sex'].isin(gender_filter))]
 
-with st.sidebar:
-  st.header("Введите признаки: ")
-  island = st.selectbox('Island', ('Torgersen', 'Dream', 'Biscoe'))
-  bill_length_mm = st.slider('Bill length (mm)', 32.1, 59.6, 44.5)
-  bill_depth_mm = st.slider('Bill length (mm)', 13.1, 21.5, 17.3)
-  flipper_length_mm = st.slider('Flipper length (mm)', 32.1, 59.6, 44.5)
-  body_mass_g = st.slider('Body mass (g)', 32.1, 59.6, 44.5)
-  gender = st.selectbox('Gender', ('female', 'male'))
+st.write("### Данные пингвинов после фильтрации")
+st.dataframe(filtered_df)
 
-# Plotting some features
-st.subheader('Data Visualization')
-fig = px.scatter(
-    df,
-    x='bill_length_mm',
-    y='bill_depth_mm',
-    color='island',
-    title='Bill Length vs. Bill Depth by Island'
-)
-st.plotly_chart(fig)
+# Графики
+st.subheader("📊 Визуализация данных")
+fig1 = px.scatter(filtered_df, x='flipper_length_mm', y='body_mass_g', color='species', title='Размер крыла vs Масса тела')
+st.plotly_chart(fig1)
 
-fig2 = px.histogram(
-    df, 
-    x='body_mass_g', 
-    nbins=30, 
-    title='Distribution of Body Mass'
-)
+fig2 = px.box(filtered_df, x='species', y='bill_length_mm', color='species', title='Длина клюва по видам')
 st.plotly_chart(fig2)
 
-## Preprocessing
-data = {
-    'island': island,
-    'bill_length_mm': bill_length_mm,
-    'bill_depth_mm': bill_depth_mm,
-    'flipper_length_mm': flipper_length_mm,
-    'body_mass_g': body_mass_g,
-    'sex': gender
-}
-input_df = pd.DataFrame(data, index=[0])
-input_penguins = pd.concat([input_df, X_raw], axis=0)
+# Подготовка данных
+X = df.drop(columns=['species'])
+y = df['species']
+label_encoders = {}
 
-with st.expander('Input features'):
-    st.write('**Input penguin**')
-    st.dataframe(input_df)
-    st.write('**Combined penguins data** (input row + original data)')
-    st.dataframe(input_penguins)
+for col in ['island', 'sex']:
+    le = LabelEncoder()
+    X[col] = le.fit_transform(X[col])
+    label_encoders[col] = le
 
-encode = ['island', 'sex']
-df_penguins = pd.get_dummies(input_penguins, prefix=encode)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Separate the top row (our input) from the rest
-X = df_penguins[1:]
-input_row = df_penguins[:1]
+# Обучение модели
+model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
+model.fit(X_train, y_train)
 
-# Encode the target
-target_mapper = {'Adelie': 0, 'Chinstrap': 1, 'Gentoo': 2}
-def target_encode(val):
-    return target_mapper[val]
+# Ввод пользовательских данных
+st.sidebar.header("Введите параметры для предсказания")
+island_input = st.sidebar.selectbox('Остров', df['island'].unique())
+bill_length_input = st.sidebar.slider('Длина клюва (мм)', float(df['bill_length_mm'].min()), float(df['bill_length_mm'].max()), float(df['bill_length_mm'].mean()))
+bill_depth_input = st.sidebar.slider('Глубина клюва (мм)', float(df['bill_depth_mm'].min()), float(df['bill_depth_mm'].max()), float(df['bill_depth_mm'].mean()))
+flipper_length_input = st.sidebar.slider('Длина крыла (мм)', float(df['flipper_length_mm'].min()), float(df['flipper_length_mm'].max()), float(df['flipper_length_mm'].mean()))
+body_mass_input = st.sidebar.slider('Масса тела (г)', float(df['body_mass_g'].min()), float(df['body_mass_g'].max()), float(df['body_mass_g'].mean()))
+gender_input = st.sidebar.selectbox('Пол', df['sex'].unique())
 
-y = y_raw.apply(target_encode)
+# Создание DataFrame с пользовательским вводом
+input_data = pd.DataFrame({
+    'island': [label_encoders['island'].transform([island_input])[0]],
+    'bill_length_mm': [bill_length_input],
+    'bill_depth_mm': [bill_depth_input],
+    'flipper_length_mm': [flipper_length_input],
+    'body_mass_g': [body_mass_input],
+    'sex': [label_encoders['sex'].transform([gender_input])[0]]
+})
 
-with st.expander('Data preparation'):
-    st.write('**Encoded X (input penguin)**')
-    st.dataframe(input_row)
-    st.write('**Encoded y**')
-    st.write(y)
+# Предсказание
+prediction = model.predict(input_data)[0]
+prediction_proba = model.predict_proba(input_data)
 
-# Model Training
-param_grid = {
-    'n_estimators': [50, 100],
-    'max_depth': [None, 5, 10]
-}
+# Вывод результата
+st.subheader("🔍 Результаты предсказания")
+st.write(f"**Предсказанный вид:** {prediction}")
 
-# Create the base model
-base_rf = RandomForestClassifier(random_state=42)
-
-# Perform grid search
-grid_search = GridSearchCV(base_rf, param_grid, cv=3, scoring='accuracy', n_jobs=-1)
-grid_search.fit(X, y)
-
-best_model = grid_search.best_estimator_
-best_params = grid_search.best_params_
-st.write("**Best Parameters**:", best_params)
-
-# ---------------------------
-# 7) Apply the best model to make predictions
-# ---------------------------
-prediction = best_model.predict(input_row)
-prediction_proba = best_model.predict_proba(input_row)
-
-df_prediction_proba = pd.DataFrame(prediction_proba, columns=['Adelie', 'Chinstrap', 'Gentoo'])
-
-## Print model final results
-
-st.subheader('Predicted Species')
-st.dataframe(
-    df_prediction_proba,
-    column_config={
-        'Adelie': st.column_config.ProgressColumn(
-            'Adelie',
-            format='%f',
-            width='medium',
-            min_value=0,
-            max_value=1
-        ),
-        'Chinstrap': st.column_config.ProgressColumn(
-            'Chinstrap',
-            format='%f',
-            width='medium',
-            min_value=0,
-            max_value=1
-        ),
-        'Gentoo': st.column_config.ProgressColumn(
-            'Gentoo',
-            format='%f',
-            width='medium',
-            min_value=0,
-            max_value=1
-        ),
-    },
-    hide_index=True
-)
-
-penguins_species = np.array(['Adelie', 'Chinstrap', 'Gentoo'])
-st.success(f"Predicted species: **{penguins_species[prediction][0]}**")
+df_prediction_proba = pd.DataFrame(prediction_proba, columns=model.classes_)
+st.bar_chart(df_prediction_proba.T)
